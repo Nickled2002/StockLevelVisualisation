@@ -20,11 +20,12 @@ data_adapter._is_distributed_dataset = _is_distributed_dataset
 client = RESTClient('GFgcUeXub0aA_nl3siNyAXRz1GiuLPZa')
 
 class stock:#stock object 
-    def __init__(self, name,df,df2):
+    def __init__(self, name,df,df2,df3):
         # stores the name of the stock and its contents so it doesnt have to be read multiple times
         self.name = name
         self.stockdf = df
         self.incomedf = df2
+        self.stockdf100k = df3
 
 class incomestatements:#income statements dataframe object 
     def __init__(self, name,df,df2):
@@ -33,13 +34,13 @@ class incomestatements:#income statements dataframe object
         self.stockdf = df
         self.incomedf = df2
 
-def retrievestockdata(name): #Retrieve stock data
+def retrievestockdata(name,time): #Retrieve stock data
     entries = []
     while not entries:
         for data in client.list_aggs(
             name,
             1,
-            "day",
+            time,
             "2022-04-05",
             datetime.datetime.today().strftime('%Y-%m-%d'),
             limit=50000,
@@ -193,6 +194,31 @@ def stockprediction(data,name):
     mplcursors.cursor(hover=True)
     plt.show()
     
+    
+def stockdatacheck(newstock,time,dfname): 
+    if getattr(newstock, dfname).empty:
+        if newstock.name == '':
+            entries = []
+            while not entries:
+                stockname=input('Which stock would you like to explore (Use capitals):')
+                try:
+                    stockname = str(stockname)
+                except:
+                    print('Please use the stock name abbreviation.')
+                    continue
+                if len(stockname) < 1 or len(stockname) > 5:
+                    print('Please use the stock name abbreviation.')
+                    continue
+                entries=retrievestockdata(stockname,time)
+            newstock.name = stockname 
+        else:
+            entries=retrievestockdata(newstock.name,time) 
+            if not entries:
+                newstock.name=''
+                return False
+        df = convertstockdataframe(entries)
+        setattr(newstock, dfname, df)
+    return True
 
 def stockprediction100k(data):
     print("todo")
@@ -201,39 +227,20 @@ def incomevisualisation(data):
     print("todo")
 
 def decisions():
-    newstock = stock('',pd.DataFrame(),pd.DataFrame())
+    newstock = stock('',pd.DataFrame(),pd.DataFrame(),pd.DataFrame())
     # user input for choice of first operation and error handling
     while True:
-        decision=input('What operation do you want to perform:General (S)tock Visualisation, (P)rediction of Stock Level, (I)ncome Statement Visualisation, (T)ry anther stock, (E)xit: ')
+        decision=input('What operation do you want to perform: 100(K) Stock Sample Predictions, General (S)tock Visualisation, (P)rediction of Stock Level, (I)ncome Statement Visualisation, (T)ry anther stock, (E)xit: ')
         match decision:
-            case 's' | 'S'|'p'|'P':
-                if newstock.stockdf.empty:
-                    if newstock.name == '':
-                        entries = []
-                        while not entries:
-                            stockname=input('Which stock would you like to explore (Use capitals):')
-                            try:
-                                stockname = str(stockname)
-                            except:
-                                print('Please use the stock name abbreviation.')
-                                continue
-                            if len(stockname) < 1 or len(stockname) > 5:
-                                print('Please use the stock name abbreviation.')
-                                continue
-                            entries=retrievestockdata(stockname)
-                        newstock.name = stockname 
-                    else:
-                        entries=retrievestockdata(newstock.name) 
-                        if not entries:
-                            newstock.name=''
-                            continue
-                    df = convertstockdataframe(entries)
-                    newstock.stockdf = df  
-                match decision:
-                    case 's' | 'S':
-                        generalvisualisation(newstock.stockdf,newstock.name)
-                    case'p' | 'P':
-                        stockprediction(newstock.stockdf,newstock.name)
+            case 's' | 'S':
+                if stockdatacheck(newstock, "day", "stockdf"):
+                    generalvisualisation(newstock.stockdf,newstock.name)
+            case 'p' | 'P':
+                if stockdatacheck(newstock, "day", "stockdf"):
+                    stockprediction(newstock.stockdf,newstock.name)
+            case 'k' | 'K':
+                if stockdatacheck(newstock, "second", "stockdf100k"):
+                    stockprediction100k(newstock.stockdf100k,newstock.name)
             case 'i' | 'I':
                 if newstock.incomedf.empty:
                     if newstock.name == '':
@@ -258,6 +265,7 @@ def decisions():
                             continue
                     incomevisualisation(entries)
             case 't'|'T':
+                print("Deleting Stock Data")
                 newstock.name = ''
                 newstock.stockdf = pd.DataFrame()
                 newstock.incomedf = pd.DataFrame()
