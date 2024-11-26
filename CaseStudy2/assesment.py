@@ -22,11 +22,9 @@ class stock:#stock object
         self.stockdf100k = df3
 
 class incomestatements:#income statements dataframe object 
-    def __init__(self, name,df,df2):
+    def __init__(self,df):
         # stores the name of the stock and its contents so it doesnt have to be read multiple times
-        self.name = name
-        self.stockdf = df
-        self.incomedf = df2
+        self.incomestatements = df
         
 #TensorFlow Compatibility Fix
 def _is_distributed_dataset(ds):
@@ -294,16 +292,23 @@ def decisions():
                             if len(stockname) < 1 or len(stockname) > 5:
                                 print('Please use the stock name abbreviation.')
                                 continue
-                            entries=retrieveincomedata(stockname)
-                            if entries:
+                            inentries=allstatements.incomestatements.query("stock == '"+stockname+"'")
+                            if inentries.empty:
+                                print("Sorry "+stockname+"'s statement isn't in the dataset try again")
+                                continue
+                            else:
+                                newstock.incomedf = inentries
+                                newstock.name = stockname
                                 break
-                        newstock.name = stockname
+                                
+                        
                     else:
-                        entries=retrieveincomedata(newstock.name) 
-                        if not entries:
+                        inentries=allstatements.incomestatements.query("stock == '"+stockname+"'")
+                        if inentries.empty:
+                            print("Sorry "+newstock.name+"'s statement isn't in the dataset try again")
                             newstock.name=''
                             continue
-                    incomevisualisation(entries)
+                    incomevisualisation(newstock.incomedf)
             case 't'|'T':
                 while True:
                     decision=input('Are you sure you want to delete the previous stock data (Y/N): ')
@@ -325,7 +330,7 @@ def decisions():
 if __name__ == "__main__":
     #Tensor flow compatibility fix
     data_adapter._is_distributed_dataset = _is_distributed_dataset
-
+    allstatements = incomestatements(pd.read_csv('cashflowStatement_annually.csv'))
     # Make call to polygon
     client = RESTClient('GFgcUeXub0aA_nl3siNyAXRz1GiuLPZa')
     decisions()
