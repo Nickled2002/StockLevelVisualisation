@@ -10,14 +10,8 @@ from tensorflow.python.keras import models
 from tensorflow.python.keras import layers
 from sklearn.metrics import root_mean_squared_error, r2_score ,mean_absolute_error
 from tensorflow.python.keras.engine import data_adapter
+from sklearn.linear_model import SGDRegressor 
 
-#TensorFlow Compatibility Fix
-def _is_distributed_dataset(ds):
-    return isinstance(ds, data_adapter.input_lib.DistributedDatasetSpec)
-
-data_adapter._is_distributed_dataset = _is_distributed_dataset
-# Make call to polygon
-client = RESTClient('GFgcUeXub0aA_nl3siNyAXRz1GiuLPZa')
 
 class stock:#stock object 
     def __init__(self, name,df,df2,df3):
@@ -33,15 +27,19 @@ class incomestatements:#income statements dataframe object
         self.name = name
         self.stockdf = df
         self.incomedf = df2
+        
+#TensorFlow Compatibility Fix
+def _is_distributed_dataset(ds):
+    return isinstance(ds, data_adapter.input_lib.DistributedDatasetSpec)
 
-def retrievestockdata(name,time): #Retrieve stock data
+def retrievestockdata(name,time,date): #Retrieve stock data
     entries = []
     while not entries:
         for data in client.list_aggs(
             name,
             1,
             time,
-            "2022-04-05",
+            date,
             datetime.datetime.today().strftime('%Y-%m-%d'),
             limit=50000,
         ):
@@ -142,6 +140,9 @@ def convertstockdataframe(entries):
     return df
 
 def retrieveincomedata(name):
+    print("todo")#
+    
+def incomevisualisation(data):
     print("todo")
 
 def stockprediction(data,name):
@@ -150,11 +151,11 @@ def stockprediction(data,name):
     preddataclose=data.filter(['close']).values
     scale = MinMaxScaler(feature_range=(0,1))
     closeprice_scaled = scale.fit_transform(preddataclose)
-    period = 60
+    period = 1
     trainsize = int(len(closeprice_scaled)*0.65)
-    traindata, testdata = closeprice_scaled[0:trainsize,:], closeprice_scaled[trainsize-60:,:]
+    traindata, testdata = closeprice_scaled[0:trainsize,:], closeprice_scaled[trainsize-period:,:]
     xtrain= []
-    ytrain=[]
+    ytrain= []
     for i in range(period, len(traindata)):
         xtrain.append(traindata[i-period:i,0])
         ytrain.append(traindata[i,0])
@@ -168,10 +169,10 @@ def stockprediction(data,name):
         ])
     print(model.summary())
     model.compile(optimizer='adam',loss='mean_squared_error')
-    model.fit(xtrain,ytrain,batch_size=1,epochs=4)
+    model.fit(xtrain,ytrain,batch_size=1,epochs=40)
     xtest , ytest =[],preddataclose[trainsize:,:]
     for i in range (period,len(testdata)):
-        xtest.append(testdata[i-60:i,0])
+        xtest.append(testdata[i-period:i,0])
     xtest = np.array(xtest)
     xtest = np.reshape(xtest, (xtest.shape[0],xtest.shape[1],1))
     pred = model.predict(xtest)
@@ -195,7 +196,7 @@ def stockprediction(data,name):
     plt.show()
     
     
-def stockdatacheck(newstock,time,dfname): 
+def stockdatacheck(newstock,time,date,dfname): 
     if getattr(newstock, dfname).empty:
         if newstock.name == '':
             entries = []
@@ -209,10 +210,10 @@ def stockdatacheck(newstock,time,dfname):
                 if len(stockname) < 1 or len(stockname) > 5:
                     print('Please use the stock name abbreviation.')
                     continue
-                entries=retrievestockdata(stockname,time)
+                entries=retrievestockdata(stockname,time,date)
             newstock.name = stockname 
         else:
-            entries=retrievestockdata(newstock.name,time) 
+            entries=retrievestockdata(newstock.name,time,date) 
             if not entries:
                 newstock.name=''
                 return False
@@ -220,26 +221,65 @@ def stockdatacheck(newstock,time,dfname):
         setattr(newstock, dfname, df)
     return True
 
-def stockprediction100k(data):
-    print("todo")
+def stockprediction100k(data, name):
+    timestamp=pd.to_datetime(data['timestamp'])
+    data = data.set_index(timestamp)
+    preddataclose=data.filter(['close']).values
+    scale = MinMaxScaler(feature_range=(0,1))
+    closeprice_scaled = scale.fit_transform(preddataclose)
+    period = 10
+    trainsize = int(len(closeprice_scaled)*0.65)
+    traindata, testdata = closeprice_scaled[0:trainsize,:], closeprice_scaled[trainsize-period:,:]
+    xtrain= []
+    ytrain=[]
+    for i in range(period, len(traindata)):
+        xtrain.append(traindata[i-period:i,0])
+        ytrain.append(traindata[i,0])
+    xtrain,ytrain = np.array(xtrain),np.array(ytrain)
+    model = SGDRegressor(max_iter=1000, alpha=0.0001, learning_rate='invscaling', random_state=0, shuffle=False)
+    model.fit(xtrain,ytrain)
+    xtest , ytest =[],preddataclose[trainsize:,:]
+    for i in range (period,len(testdata)):
+        xtest.append(testdata[i-period:i,0])
+    xtest = np.array(xtest)
+    pred = model.predict(xtest)
+    pred = scale.inverse_transform(pred.reshape(-1, 1))
+    print("Mean Absolute Error: ", mean_absolute_error(ytest, pred))
+    print("Coefficient of Determination: ", r2_score(ytest, pred))
+    print("Mean Squared Error: ",root_mean_squared_error(ytest,pred))
+    train = data[:trainsize]
+    test = data[trainsize:].copy()
+    test['pred'] = pred
+    plt.plot(figsize = (20,10))
+    plt.grid(which="major", color='k', linestyle='-.', linewidth=0.5)
+    plt.plot(train['close'])
+    plt.plot(test[['close','pred']])
+    plt.xlabel('Date', fontsize=14)
+    plt.ylabel('Price', fontsize=14)
+    plt.title(name+"'s Close Stock Price Predictions ", fontsize=16)
+    plt.legend(['Train','Test','Predictions'])
+    plt.gcf().autofmt_xdate()
+    mplcursors.cursor(hover=True)
+    plt.show()
 
-def incomevisualisation(data):
-    print("todo")
+
 
 def decisions():
     newstock = stock('',pd.DataFrame(),pd.DataFrame(),pd.DataFrame())
     # user input for choice of first operation and error handling
     while True:
-        decision=input('What operation do you want to perform: 100(K) Stock Sample Predictions, General (S)tock Visualisation, (P)rediction of Stock Level, (I)ncome Statement Visualisation, (T)ry anther stock, (E)xit: ')
+        decision=input('What operation do you want to perform: (H)our precise Stock Sample Predictions[Year To Date], General (S)tock Visualisation, (P)rediction of Stock Level, (I)ncome Statement Visualisation, (T)ry anther stock, (E)xit: ')
         match decision:
             case 's' | 'S':
-                if stockdatacheck(newstock, "day", "stockdf"):
+                if stockdatacheck(newstock, "day","2022-04-05", "stockdf"):
                     generalvisualisation(newstock.stockdf,newstock.name)
             case 'p' | 'P':
-                if stockdatacheck(newstock, "day", "stockdf"):
+                if stockdatacheck(newstock, "day","2022-04-05", "stockdf"):
                     stockprediction(newstock.stockdf,newstock.name)
             case 'k' | 'K':
-                if stockdatacheck(newstock, "second", "stockdf100k"):
+                today = datetime.datetime.today()
+                ytd=str(int(today.strftime("%Y"))-1)+"-"+today.strftime("%m")+"-"+today.strftime("%d")
+                if stockdatacheck(newstock, "hour",ytd, "stockdf100k"):
                     stockprediction100k(newstock.stockdf100k,newstock.name)
             case 'i' | 'I':
                 if newstock.incomedf.empty:
@@ -265,13 +305,27 @@ def decisions():
                             continue
                     incomevisualisation(entries)
             case 't'|'T':
-                print("Deleting Stock Data")
-                newstock.name = ''
-                newstock.stockdf = pd.DataFrame()
-                newstock.incomedf = pd.DataFrame()
+                while True:
+                    decision=input('Are you sure you want to delete the previous stock data (Y/N): ')
+                    match decision:
+                        case 'y' | 'Y':
+                            print("Deleting Stock Data")
+                            newstock.name = ''
+                            newstock.stockdf = pd.DataFrame()
+                            newstock.incomedf = pd.DataFrame()
+                            break
+                        case 'n' | 'N':
+                            break
+                        case _: # error handling
+                            print("Please use a character within the scope")
             case 'e'|'E':
                 break
             case _: # error handling
                 print("Please use a character within the scope")
+if __name__ == "__main__":
+    #Tensor flow compatibility fix
+    data_adapter._is_distributed_dataset = _is_distributed_dataset
 
-decisions()
+    # Make call to polygon
+    client = RESTClient('GFgcUeXub0aA_nl3siNyAXRz1GiuLPZa')
+    decisions()
