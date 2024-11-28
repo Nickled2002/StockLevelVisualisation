@@ -3,6 +3,7 @@ from polygon import RESTClient
 from polygon.rest.models import (Agg,)
 import datetime
 import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 import mplcursors
 from sklearn.preprocessing import MinMaxScaler
 import numpy as np
@@ -137,11 +138,26 @@ def convertstockdataframe(entries):
     df = pd.DataFrame(data=dfdata)
     return df
 
-def retrieveincomedata(name):
-    print("todo")#
     
-def incomevisualisation(data):
-    print("todo")
+def incomevisualisation(plotdata):
+    for entry in plotdata.index:
+        fig = go.Figure(data=[go.Sankey(
+        valueformat = ".0f",
+        valuesuffix = " $ ",
+        node = dict(
+        pad = 100,
+        thickness = 2,
+        line = dict(color = "black", width = 0.001),
+        label = ["Revenue","Cost Of Revenue", "Gross Profit","Operating Expenses","Operating Income","Administrative Operating Expenses", "Research and Development","Other Operating Expenses","Total Other Income","Income Before Tax","Income Tax Expense","Net Income"],
+        color = ["green","Red","green","Red","green","Red","Red","Red","blue","green","Red","green"],
+        ),
+        link = dict(
+        source = [0, 0, 2, 2, 3, 3, 3, 4, 8, 9, 9], 
+        target = [1, 2, 3, 4, 5, 6, 7, 9, 9, 11, 10],
+        value =  [abs(plotdata['grossProfit'][entry]), abs(plotdata['costOfRevenue'][entry]), abs(plotdata['totalOperatingExpenses'][entry])-abs(plotdata['costOfRevenue'][entry]), abs(plotdata['operatingIncome'][entry]), abs(plotdata['sellingGeneralAdministrative'][entry]), abs(plotdata['researchDevelopment'][entry]), abs(plotdata['otherOperatingExpenses'][entry]), abs(plotdata['incomeBeforeTax'][entry]), abs(plotdata['totalOtherIncomeExpenseNet'][entry]), abs(plotdata['incomeTaxExpense'][entry]), abs(plotdata['netIncome'][entry])],
+        ))])
+        fig.update_layout(title_text=plotdata['stock'][entry]+"'s Income Statement - "+plotdata['endDate'][entry], font_size=10)
+        fig.show()        
 
 def stockprediction(data,name):
     timestamp=pd.to_datetime(data['timestamp'])
@@ -274,7 +290,7 @@ def decisions():
             case 'p' | 'P':
                 if stockdatacheck(newstock, "day","2022-04-05", "stockdf"):
                     stockprediction(newstock.stockdf,newstock.name)
-            case 'k' | 'K':
+            case 'h' | 'H':
                 today = datetime.datetime.today()
                 ytd=str(int(today.strftime("%Y"))-1)+"-"+today.strftime("%m")+"-"+today.strftime("%d")
                 if stockdatacheck(newstock, "hour",ytd, "stockdf100k"):
@@ -330,7 +346,7 @@ def decisions():
 if __name__ == "__main__":
     #Tensor flow compatibility fix
     data_adapter._is_distributed_dataset = _is_distributed_dataset
-    allstatements = incomestatements(pd.read_csv('cashflowStatement_annually.csv'))
+    allstatements = incomestatements(pd.read_csv('CaseStudy2/incomeStatementHistory_annually.csv').fillna(0))
     # Make call to polygon
     client = RESTClient('GFgcUeXub0aA_nl3siNyAXRz1GiuLPZa')
     decisions()
