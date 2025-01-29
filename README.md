@@ -1,0 +1,1 @@
+This project goes a step further than my last stock visualisation tool collating with the Polygon API the matching stocks accounting information. This allowed for the development offurther visualisation such as sankey diagrams for the companies cash flow. Additionally a machine learning model can be trained to predict potential fututre stock levels. 
